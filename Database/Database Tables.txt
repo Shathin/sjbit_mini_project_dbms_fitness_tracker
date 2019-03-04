@@ -1,0 +1,512 @@
+Schema:
+
+*calories_g for 100g, calories_m for per minute.
+ 
+	USER (user_id, user_name, password, first_name, last_name, email, age)
+    
+    FOOD_CATEGORY_DB (category_id, category_name)
+    
+    FOOD_DB (food_id, food_name,food_category_id, calories_g)
+	
+    EXERCISE_CATEGORY_DB (category_id, category_name)
+    
+	EXERCISE_DB (exercise_id, exercise_name, exercise_category_id, calories_m) 
+    
+	WEIGHT_LOG (log_entry_id, user_id, log_date, weight_kg)
+	
+	FAT_LOG (log_entry_id, user_id, log_date, fat_p)
+	
+	FOOD_LOG (log_entry_id, user_id, log_date, food_id, amount_g, calories_consumed) 
+	
+	CARDIO_EXERCISE_LOG (log_entry_id, user_id, log_date, exercise_id, distance, time, calories_burnt)
+    
+    STRENGTH_EXERCISE_LOG (log_entry_id, user_id, log_date, exercise_id, weights, sets, reps, calories_burnt)
+    
+    CALORIES_BURNT_GRAPH (entry_id, user_id, c_date, total_burnt_calories)
+    
+    CALORIES_GAINED_GRAPH (entry_id, user_id, c_date, total_gained_calories)
+    
+    
+
+Table Creation: 
+    
+    create table USER (user_id int primary key auto_increment, user_name varchar(30) not null unique, password varchar(30) not null, first_name varchar(30) not null, last_name varchar(30), email varchar(40) not null unique, age int not null);
+    
+    create table FOOD_CATEGORY_DB (category_id int auto_increment primary key, category_name varchar(30) not null unique);
+    
+    create table FOOD_DB (food_id int primary key auto_increment, food_name varchar(30) not null unique, food_category_id int, calories_g int(4) not null, foreign key (food_category_id) references food_category_db(category_id));
+    
+    create table EXERCISE_CATEGORY_DB (category_id int auto_increment primary key, category_name varchar(30) not null unique);
+    
+    create table EXERCISE_DB (exercise_id int primary key auto_increment, exercise_name varchar(40) not null unique, exercise_category_id int, calories_m int(3) not null, foreign key (exercise_category_id) references exercise_category_db(category_id));
+    
+    
+    create table WEIGHT_LOG (log_entry_id int primary key auto_increment, user_id int, log_date date, weight_kg int(3), foreign key (user_id) references USER(user_id) on delete cascade);
+    
+    create table FAT_LOG (log_entry_id int primary key auto_increment, user_id int, log_date date, fat_p int(2), foreign key (user_id) references USER(user_id) on delete cascade);
+    
+    create table FOOD_LOG (log_entry_id int primary key auto_increment, user_id int, log_date date, food_id int, amount_g int, calories_consumed int, foreign key (user_id) references USER(user_id) on delete cascade, foreign key (food_id) references FOOD_DB(food_id));
+    
+    create table CARDIO_EXERCISE_LOG (log_entry_id int primary key auto_increment, user_id int, log_date date, exercise_id int, distance int, time int, calories_burnt int, foreign key (user_id) references USER(user_id) on delete cascade, foreign key (exercise_id) references EXERCISE_DB(exercise_id));
+    
+    create table STRENGTH_EXERCISE_LOG (log_entry_id int primary key auto_increment, user_id int, log_date date, exercise_id int, weights int, sets int, reps int, calories_burnt int, foreign key (user_id) references USER(user_id) on delete cascade, foreign key (exercise_id) references EXERCISE_DB(exercise_id));
+    
+    create table CALORIES_BURNT_GRAPH (entry_id int primary key auto_increment, user_id int, c_date date, total_burnt_calories int, foreign key (user_id) references USER(user_id));
+    
+    create table CALORIES_GAINED_GRAPH (entry_id int primary key auto_increment, user_id int, c_date date, total_gained_calories int, foreign key (user_id) references USER(user_id));
+    
+    
+Writing Triggers:
+
+CREATE TRIGGER `timestamp_weight` BEFORE INSERT ON `weight_log` FOR EACH ROW SET NEW.log_date = CURRENT_DATE();
+
+CREATE TRIGGER `timestamp_fat` BEFORE INSERT ON`fat_log` FOR EACH ROW SET NEW.log_date = CURRENT_DATE();
+
+CREATE TRIGGER `timestamp_food` BEFORE INSERT ON `food_log` FOR EACH ROW SET NEW.log_date = CURRENT_DATE();
+
+CREATE TRIGGER `timestamp_exercise_cardio` BEFORE INSERT ON `cardio_exercise_log` FOR EACH ROW SET NEW.log_date = CURRENT_DATE();
+
+CREATE TRIGGER `timestamp_exercise_strength` BEFORE INSERT ON `strength_exercise_log` FOR EACH ROW SET NEW.log_date = CURRENT_DATE();
+
+
+Writing Stored Procedures:
+
+DELIMITER $$
+    CREATE PROCEDURE cal_burnt_graph(IN uid int, IN cu_date int) MODIFIES SQL DATA
+        BEGIN
+            DECLARE tot_cal int;
+            DECLARE userid int;
+            DECLARE cardio_tot_cal int;
+            DECLARE strength_tot_cal int;
+            SET userid = (select user_id from calories_burnt_graph where c_date = cu_date and user_id = uid);
+            SET cardio_tot_cal = (select sum(calories_burnt) from cardio_exercise_log where user_id = uid and log_date = cu_date);
+            SET strength_tot_cal = (select sum(calories_burnt) from strength_exercise_log where user_id = uid and log_date = cu_date);
+            IF cardio_tot_cal IS NULL THEN 
+                SET cardio_tot_cal = 0;
+            END IF;
+            IF strength_tot_cal IS NULL THEN 
+                SET strength_tot_cal = 0;
+            END IF;
+            SET tot_cal =  cardio_tot_cal + strength_tot_cal ;
+            IF userid IS NULL THEN
+                insert into calories_burnt_graph (user_id, c_date, total_burnt_calories) values (uid,cu_date,tot_cal);
+            ELSE 
+                update calories_burnt_graph SET total_burnt_calories = tot_cal where user_id = uid and c_date = cu_date;
+            END IF;
+        END$$
+DELIMITER ;
+
+DELIMITER $$
+    CREATE PROCEDURE cal_gained_graph(IN uid int, IN cu_date int) MODIFIES SQL DATA
+        BEGIN
+        DECLARE tot_cal int;
+        DECLARE userid int;
+        SET FOREIGN_KEY_CHECKS=0;
+        SET userid = (select user_id from calories_gained_graph where c_date = cu_date and user_id = uid);
+            IF userid IS NULL THEN
+                SET tot_cal = (select sum(calories_consumed) from food_log where user_id = uid and log_date = cu_date);
+                insert into calories_gained_graph (user_id, c_date, total_gained_calories) values (uid,cu_date,tot_cal);
+            ELSE 
+                SET tot_cal = (select sum(calories_consumed) from food_log where user_id = uid and log_date = cu_date);
+                update calories_gained_graph SET total_gained_calories = tot_cal where user_id = uid and c_date = cu_date;
+            END IF;
+        END$$
+DELIMITER ;
+    
+  DELIMITER $$
+    CREATE PROCEDURE cal_burnt_cardio() MODIFIES SQL DATA 
+        BEGIN
+           DECLARE cal int;
+           DECLARE log_id int;
+           
+            SET log_id = (SELECT max(log_entry_id) from cardio_exercise_log);
+            SET cal = (SELECT cardio_exercise_log.time FROM cardio_exercise_log WHERE log_entry_id = log_id) * (SELECT calories_m FROM exercise_db WHERE exercise_id IN (SELECT exercise_id FROM cardio_exercise_log WHERE log_entry_id = log_id)); 
+            UPDATE cardio_exercise_log SET calories_burnt = cal WHERE log_entry_id = log_id;
+        END $$
+DELIMITER ;
+
+ DELIMITER $$
+    CREATE PROCEDURE cal_burnt_strength() MODIFIES SQL DATA 
+        BEGIN
+           DECLARE cal int;
+           DECLARE log_id int;
+           
+            SET log_id = (SELECT max(log_entry_id) from strength_exercise_log);
+            SET cal = (SELECT strength_exercise_log.sets FROM strength_exercise_log WHERE log_entry_id = log_id) * (SELECT calories_m FROM exercise_db WHERE exercise_id IN (SELECT exercise_id FROM strength_exercise_log WHERE log_entry_id = log_id)); 
+            UPDATE strength_exercise_log SET calories_burnt = cal WHERE log_entry_id = log_id;
+        END $$
+DELIMITER ;
+ 
+ 
+ DELIMITER $$
+    CREATE PROCEDURE cal_gained() MODIFIES SQL DATA
+        BEGIN
+            DECLARE log_id int;
+            DECLARE cal int;
+            SET log_id = (SELECT max(log_entry_id) from food_log);
+            SET cal = ((SELECT amount_g FROM food_log WHERE log_entry_id = log_id) * (SELECT calories_g FROM food_db WHERE food_id IN (SELECT food_id FROM food_log WHERE log_entry_id = log_id))) / 100;
+            UPDATE food_log SET calories_consumed = cal WHERE log_entry_id = log_id;
+         END$$
+DELIMITER ;
+
+
+            
+    
+    
+Inserting Values into the tables:
+    
+    
+    INSERT INTO `user` (`user_id`, `user_name`, `password`,`first_name`,`last_name`,`email`,`age`) VALUES
+(1, 'sandman', '1234','Sandman',' ','sandman@xyz.com','20'),
+(2, 'foxtrot', '5678','Foxtrot','Zulu','foxtrot@abc.com','30');
+
+    
+    INSERT INTO `exercise_category_db` (`category_name`) VALUES
+('Abdominals'), 
+('Back'),
+('Biceps'), 
+('Legs'), 
+('Chest'), 
+('Forearms'), 
+('Shoulder'),
+('Triceps'),
+('Cardio');
+    
+    INSERT INTO `exercise_db` (`exercise_id`, `exercise_name`, `calories_m`, `exercise_category_id`) VALUES
+(1, 'Crunches', 3, '1'),
+(2, 'Side Crunches', 3, '1'),
+(3, 'Sit Ups', 6, '1'),
+(4, 'Hanging Leg Raises', 6, '1'),
+(5, 'Plank', 4, '1'),
+(6, 'Leg Raises', 6, '1'),
+(7, 'Dumbbell Side Bend', 5, '1'),
+(8, 'Side Plank', 7, '1'),
+(9, 'Mountain Climbers', 8, '1'),
+(10, 'Bicycle Crunches', 4, '1'),
+(11, 'One Arm Dumbbell Bent Over Rows', 7, '2'),
+(12, 'Seated Cable Rows', 6, '2'),
+(13, 'Lat Pulldown', 7, '2'),
+(14, 'Pull Ups', 7, '2'),
+(15, 'Behind the Neck Pulldown', 7, '2'),
+(16, 'Bent Over Barbell Rows', 7, '2'),
+(17, 'Deadlifts', 8, '2'),
+(18, 'Hyper Extensions', 6, '2'),
+(19, 'T-Bar Rows', 7, '2'),
+(20, 'Good Mornings', 8, '2'),
+(21, 'Barbell Curl', 6, '3'),
+(22, 'Preacher Curl', 5, '3'),
+(23, 'Hammer Curl', 6, '3'),
+(24, 'Concentration Curl', 6, '3'),
+(25, 'EZ Bar Curl', 5, '3'),
+(26, 'Zottman Curl', 5, '3'),
+(27, 'Cross Body Hammer Curl', 5, '3'),
+(28, 'Overhead Cable Curl', 6, '3'),
+(29, 'Incline Dumbbell Curl', 5, '3'),
+(30, 'Incline Hammer Curl', 5, '3'),
+(31, 'Standing Calf Raise', 3, '4'),
+(32, 'Seated Calf Raise', 4, '4'),
+(33, 'Leg Extension', 5, '4'),
+(34, 'Barbell Squats', 8, '4'),
+(35, 'Dumbbell Lunges', 8, '4'),
+(36, 'Leg Press', 7, '4'),
+(37, 'Leg Curl', 7, '4'),
+(38, 'Stiff Leg Deadlifts', 7, '4'),
+(39, 'Step Ups', 7, '4'),
+(40, 'Front Squats', 8, '4'),
+(41, 'Bench Press', 8, '5'),
+(42, 'Flat Dumbbell Flyes', 7, '5'),
+(43, 'Push Ups', 6, '5'),
+(44, 'Incline Dumbbell Press', 7, '5'),
+(45, 'Machine Chest Press', 6, '5'),
+(46, 'Pec Deck Flyes', 6, '5'),
+(47, 'Cable Cross Overs', 7, '5'),
+(48, 'Decline Dumbbell Bench Press', 7, '5'),
+(49, 'Pull Over', 6, '5'),
+(50, 'Upward Cable Crossovers', 6, '5'),
+(51, 'Wrist Curls', 3, '6'),
+(52, 'Reverse Wrist Curls', 4, '6'),
+(53, 'Weight Roll Ups', 3, '6'),
+(54, 'Bar Hold', 4, '6'),
+(55, 'Plate Pinches', 3, '6'),
+(56, 'Dumbbell Shoulder Press', 7, '7'),
+(57, 'Lateral Raises', 5, '7'),
+(58, 'Machine Shoulder Press', 5, '7'),
+(59, 'Front Dumbbell Raises', 5, '7'),
+(60, 'Arnold Press', 6, '7'),
+(61, 'Shrugs', 6, '7'),
+(62, 'Rear Deltoid Flyes', 5, '7'),
+(63, 'Clean and Press', 7, '7'),
+(64, 'Front Plate Raise', 5, '7'),
+(65, 'Kettlebell Press', 7, '7'),
+(66, 'Upright Rows', 6, '7'),
+(67, 'Cable Pushdown', 5, '8'),
+(68, 'Kick Back', 5, '8'),
+(69, 'One Arm Dumbbell Extension', 5, '8'),
+(70, 'Bench Dips', 4, '8'),
+(71, 'Rope Extensions', 5, '8'),
+(72, 'Close Grip Bench Press', 7, '8'),
+(73, 'Push Ups: Close Grip', 5, '8'),
+(74, 'Tricep Extension', 4, '8'),
+(75, 'Skull Crushers', 4, '8'),
+(76, 'Brisk Walk', 4, '9'),
+(77, 'Elliptical Trainer', 6, '9'),
+(78, 'Outdoor Running', 9, '9'),
+(79, 'Treadmill Running', 10, '9'),
+(80, 'Stationary Bike', 9, '9'),
+(81, 'Incline Walk', 7, '9'),
+(82, 'Swimming', 8, '9'),
+(83, 'Rowing Machine', 8, '9'),
+(84, 'Jumping Rope', 11, '9'),
+(85, 'Pilates', 7, '9');
+
+    
+    INSERT INTO `food_category_db` (`category_name`) VALUES
+('Fruits'), 
+('Vegetables'),
+('Dry Fruits'), 
+('Cereals'), 
+('Dairy'), 
+('Meat'), 
+('Chocolate');
+
+    INSERT INTO `food_db` (`food_name`,`food_category_id`,`calories_g`) VALUES 
+('Apple','1','44'),
+('Avocado','1','160'),
+('Banana','1','65'), 
+('Cherry','1','50'), 
+('Grapes','1','62'),
+('Guava','1','68'),
+('Kiwi','1','50'), 
+('Lemon','1','29'),
+('Mango','1','60'), 
+('Melon','1','28'), 
+('Orange','1','30'), 
+('Peach','1','30'), 
+('Pear','1','38'), 
+('Pineapple','1','40'), 
+('Strawberries','1','30'), 
+('Tomato','1','20'), 
+('Beans','2','80'), 
+('Brocolli','2','32'), 
+('Cabbage','2','20'), 
+('Carrot','2','25'), 
+('Cauliflower','2','30'), 
+('Celery','2','10'), 
+('Cucumber','2','10'),
+('Leek','2','20'),
+('Lentils','2','100'),
+('Letuce','2','15'),
+('Mushrooms','2','12'),
+('Olives','2','80'),
+('Onion','2','40'),
+('Peas','2','148'),
+('Spinach','2','8'),
+('Dates','3','282'),
+('Cashew','3','553'),
+('Almonds','3','576'),
+('Anjeer (Figs)','3','47'),
+('Peanut','3','567'),
+('Walnuts','3','654'),
+('Wheat','4','339'),
+('Oats','4','68'),
+('Rice','4','111'),
+('Corn','4','365'),
+('Cornflakes','4','357'),
+('Pasta','4','110'),
+('Noodles','4','70'),
+('Cheese','5','440'),
+('Cream','5','428'),
+('Eggs','5','150'),
+('Ice Cream','5','180'),
+('Milk','5','70'),
+('Soya Milk','5','36'),
+('Yogurt','5','60'),
+('Butter','5','750'),
+('Bacon','6','500'),
+('Beef','6','280'),
+('Chicken','6','200'),
+('Cod','6','100'),
+('Crab','6','110'),
+('Duck','6','430'),
+('Ham','6','240'),
+('Lam','6','300'),
+('Lobster','6','100'),
+('Pheasant','6','200'),
+('Prawns','6','100'),
+('Pork','6','290'),
+('Rabbit','6','180'),
+('Salmon','6','180'),
+('Turkey','6','160'),
+('Veal','6','240'),
+('Dairy Milk Silk','7','365'),
+('Nestle Milky Bar','7','108'),
+('Mars','7','491'),
+('Snickers','7','480'),
+('Ferero Rocher','7','220'),
+('Cadburys Bournville','7','225');
+
+
+    INSERT INTO `fat_log` (`user_id`,`log_date`,`fat_p`) VALUES
+(1,'2017-10-01',15),
+(2,'2017-10-01',20),
+(1,'2017-10-03',15),
+(2,'2017-10-03',20),
+(1,'2017-10-05',15),
+(2,'2017-10-05',20),
+(1,'2017-10-07',15),
+(2,'2017-10-07',20),
+(1,'2017-10-09',15),
+(2,'2017-10-09',20),
+(1,'2017-10-11',14),
+(2,'2017-10-11',19),
+(1,'2017-10-13',14),
+(2,'2017-10-13',19),
+(1,'2017-10-15',14),
+(2,'2017-10-15',19),
+(1,'2017-10-17',14),
+(2,'2017-10-17',19),
+(1,'2017-10-19',14),
+(2,'2017-10-19',19),
+(1,'2017-10-21',14),
+(2,'2017-10-21',19),
+(1,'2017-10-23',14),
+(2,'2017-10-23',20),
+(1,'2017-10-25',13),
+(2,'2017-10-25',19),
+(1,'2017-10-27',13),
+(2,'2017-10-27',18),
+(1,'2017-10-29',13),
+(2,'2017-10-29',19);
+
+    INSERT INTO `weight_log` (`user_id`,`log_date`,`weight_kg`) VALUES
+(1,'2017-10-01',100),
+(2,'2017-10-01',120),
+(1,'2017-10-03',99),
+(2,'2017-10-03',120),
+(1,'2017-10-05',98),
+(2,'2017-10-05',118),
+(1,'2017-10-07',99),
+(2,'2017-10-07',119),
+(1,'2017-10-09',99),
+(2,'2017-10-09',118),
+(1,'2017-10-11',97),
+(2,'2017-10-11',118),
+(1,'2017-10-13',98),
+(2,'2017-10-13',117),
+(1,'2017-10-15',97),
+(2,'2017-10-15',118),
+(1,'2017-10-17',96),
+(2,'2017-10-17',119),
+(1,'2017-10-19',97),
+(2,'2017-10-19',118),
+(1,'2017-10-21',96),
+(2,'2017-10-21',117),
+(1,'2017-10-23',96),
+(2,'2017-10-23',116),
+(1,'2017-10-25',96),
+(2,'2017-10-25',118),
+(1,'2017-10-27',97),
+(2,'2017-10-27',117),
+(1,'2017-10-29',96),
+(2,'2017-10-29',118);
+
+Queries:
+    select log_date, category_name, exercise_name, weights, sets, reps, calories_burnt from exercise_category_db as cdb, exercise_db as db, strength_exercise_log as log where db.exercise_id = log.exercise_id and cdb.category_id = db.exercise_category_id and user_id = 1 and log_date between '2017-11-02' and '2017-11-06'; 
+    
+    select log_date, category_name, exercise_name, time, distance, calories_burnt from exercise_category_db as cdb, exercise_db as db, cardio_exercise_log as log where db.exercise_id = log.exercise_id and cdb.category_id = db.exercise_category_id and user_id = 1 and log_date between '2017-11-02' and '2017-11-06'; 
+    
+    select log_date, category_name, food_name, amount_g, calories_consumed from food_category_db as cdb, food_db as db, food_log as log where db.food_id = log.food_id and cdb.category_id = db.food_category_id and user_id = 1 and log_date between '2017-11-02' and '2017-11-06';
+
+	USER
+	-
+	user_id int pk
+	user_name varchar
+	password varchar 
+	first_name varchar 
+	last_name varchar 
+	email varchar 
+	age int
+	
+    
+    FOOD_CATEGORY_DB 
+    -
+    category_id int pk 
+    category_name varchar
+    
+    FOOD_DB 
+    -
+    food_id int pk 
+    food_name varchar
+    food_category_id int
+    calories_g int
+	
+    EXERCISE_CATEGORY_DB 
+    -
+    category_id int pk 
+    category_name varchar
+    
+	EXERCISE_DB 
+	-
+	exercise_id int pk
+	exercise_name varchar
+	exercise_category_id int 
+	calories_m int 
+    
+	WEIGHT_LOG 
+	-
+	log_entry_id int pk 
+	user_id int
+	log_date date
+	weight_kg int
+	
+	FAT_LOG 
+	-
+	log_entry_id int pk 
+	user_id int 
+	log_date date
+	fat_p int
+	
+	FOOD_LOG 
+	-
+	log_entry_id int pk
+	user_id int 
+	log_date date 
+	food_id int
+	amount_g int
+	calories_consumed int 
+	
+	CARDIO_EXERCISE_LOG 
+	-
+	log_entry_id int pk
+	user_id int
+	log_date date
+	exercise_id int 
+	distance int
+	time int
+	calories_burnt int
+    
+    STRENGTH_EXERCISE_LOG 
+    -
+    log_entry_id int pk 
+    user_id int 
+    log_date date 
+    exercise_id int 
+    weights int 
+    sets int
+    reps int 
+    calories_burnt int
+    
+    CALORIES_BURNT_GRAPH 
+    -
+    entry_id int pk
+    user_id int
+    c_date date 
+    total_burnt_calories int
+    
+    CALORIES_GAINED_GRAPH 
+    -
+    entry_id int pk 
+    user_id int 
+    c_date date 
+    total_gained_calories int
+    

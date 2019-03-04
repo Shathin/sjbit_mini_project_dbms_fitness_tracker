@@ -1,0 +1,84 @@
+body{
+    margin:0;
+    padding: 0;
+}
+h1{
+    color: white;
+    font-family: sans-serif;
+}
+h2,h4{
+    color: white;
+    font-family: sans-serif;
+    
+}
+.header{
+    width: 100%;
+    background-color: #383838;
+    text-align: center;
+    border-top-style: solid;
+    border-bottom-style: solid;
+    border-bottom-color: white;
+    border-top-color: white; 
+}
+.content{
+    background-image: url("images/Pic5.jpg");
+    height: 570px;
+    width: 100%;
+}
+.box{
+    position: absolute;
+    margin-top: 5%;
+    margin-left: 30%;
+    width: 35%;
+    background-color: #383838;
+    text-align: center;
+    border-radius: 20px;
+    border: 1px solid #383838;
+    font-family: sans-serif;
+    align-content: center;
+    opacity: 0.9;
+    
+}
+table{
+    margin-left: 60px;
+    margin-bottom: 10px;
+    color: white;
+    width: 70%;
+}
+td,tr{
+    line-height: 250%;
+    font-family: sans-serif;
+    padding-left: none;
+    
+}
+a{
+    text-decoration-line: none;
+    color: whitesmoke;
+}
+.footer{
+    width: 90%;
+    text-align: center;
+}
+input[type=text],[type=password],[type=number]{
+    color: black;
+    background-color: white;
+    border-style: solid;
+    border-color: white;
+    border-radius: 20px;
+    height: 25px;
+    width: 100%;
+    padding-left: 10px;
+    
+}
+input[type=submit]{
+    background-color: black;
+    color: white;
+    height: 30px;
+    width: 100px;
+    border-style: solid;
+    border-color: black;
+    border-radius: 20px;
+    
+}
+
+
